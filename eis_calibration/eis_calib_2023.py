@@ -1,8 +1,14 @@
 import datetime
+import pathlib
 import re
+
+import astropy.time
 import numpy as np
+import sunpy.time
+
 from scipy.interpolate import interp1d
 from scipy.io import readsav
+
 from eis_calibration.eis_calib_2014 import eis_ea
 
 def anytim2tai(time_str):
@@ -57,16 +63,13 @@ def anytim2tai(time_str):
 
     return tai_time
 
-from scipy.interpolate import InterpolatedUnivariateSpline
 
 def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_file=None, quiet=False):
-    # Validate input values
-    if np.size(date) != 1:
-        raise ValueError('ERROR: please input a single date')
+    date = sunpy.time.parse_time(date)
+    wavelength = wavelength.to_value('AA')
     
-    in_tai = anytim2tai(date)
-
-    if in_tai < anytim2tai('2006-10-20T10:20:00.000'):
+    eis_start = astropy.time.Time('2006-10-20T10:20:00.000', format='isot', scale='utc')
+    if date < eis_start:
         print('WARNING: Selected date is before the start of normal EIS science operations. Output values may be inaccurate.')
 
     if not short and not long:
@@ -81,7 +84,7 @@ def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_
     elif long:
         wavelength = 1000
 
-    fit_ea = readsav('eis_calibration/fit_eis_ea_2023-05-04.sav')['fit_ea']
+    fit_ea = readsav(pathlib.Path(__file__).parent / 'fit_eis_ea_2023-05-04.sav')['fit_ea']
     # Extract the necessary data from the loaded file
     fit_dates = fit_ea.date_obs[0].astype(str)
     fit_easw = fit_ea.sw_ea[0]
@@ -89,17 +92,17 @@ def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_
     sw_wave = fit_ea.sw_wave[0]
     lw_wave = fit_ea.lw_wave[0]
 
-    ref_tai = np.array([anytim2tai(date) for date in fit_dates])
+    ref_tai = sunpy.time.parse_time(fit_dates)
 
-    if in_tai < ref_tai[0]:
+    if date < ref_tai[0]:
         if not quiet:
             print(f"WARNING: Selected date is before the first calibrated date on {fit_ea.date_obs[0]}. Returning first fit calibration")
-        in_tai = ref_tai[0]
+        date = ref_tai[0]
 
-    if in_tai > ref_tai[-1]:
+    if date > ref_tai[-1]:
         if not quiet:
             print(f"WARNING: Selected date is after the last calibrated date on {fit_ea.date_obs[-1][-1]}. Returning last fit calibration")
-        in_tai = ref_tai[-1]
+        date = ref_tai[-1]
 
     # Select out the desired waveband
     if short or (np.size(wavelength) > 0 and np.max(wavelength) < 220):
@@ -114,7 +117,7 @@ def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_
     new_ea = np.zeros(n_ref_waves)
     for w in range(n_ref_waves):
         ea_values = ref_ea[w,:]
-        new_ea[w] = np.interp(in_tai, ref_tai, ea_values)
+        new_ea[w] = np.interp(date.tai_seconds, ref_tai.tai_seconds, ea_values)
         
     if not short and not long:
         out_ea = interp1d(ref_wave, new_ea, kind='cubic')(wavelength)
@@ -145,10 +148,5 @@ def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_
     return out_ea
 
 def calib_2023(map):
-    import sunpy.map
-
-    match = re.search(r'\d+\.\d+', map.meta['line_id'])
-    wvl_value = float(match.group())
-    calib_ratio_2023 = eis_ea(wvl_value)/interpol_eis_ea(map.date.value, wvl_value)
-    new_map = sunpy.map.Map(map.data*calib_ratio_2023, map.meta)
-    return new_map
+    calib_ratio_2023 = eis_ea(map.wavelength)/interpol_eis_ea(map.date, map.wavelength)
+    return map * calib_ratio_2023

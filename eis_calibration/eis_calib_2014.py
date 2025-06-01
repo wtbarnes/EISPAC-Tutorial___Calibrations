@@ -1,7 +1,9 @@
 from datetime import datetime
+import pathlib
+
 import numpy as np
+
 from scipy.io import readsav
-# from scipy.interpolate import splrep, splev
 from scipy.interpolate import interp1d
 
 
@@ -29,7 +31,7 @@ def read_calib_file():
     from scipy.io import readsav
 
     # Read the calibration file
-    calib_file = readsav('eis_calibration/eis_calib_warren_2014.sav')
+    calib_file = readsav(pathlib.Path(__file__).parent / 'eis_calib_warren_2014.sav')
     return calib_file['eis']
 
 def eis_get_band(wave):
@@ -49,7 +51,6 @@ def eis_get_band(wave):
 
     return band
 
-from scipy.interpolate import interp1d
 
 def eis_ea_nrl(date, wave, short=False, long=False):
     eis = read_calib_file()
@@ -98,6 +99,7 @@ def eis_ea_nrl(date, wave, short=False, long=False):
     return ea_out
     
 def eis_ea(input_wave, short=False, long=False):
+    input_wave = input_wave.to_value('AA')
     if short:
         wave, ea = eis_effective_area_read(short=True)
         input_wave = wave
@@ -130,9 +132,9 @@ def eis_ea(input_wave, short=False, long=False):
 
 def eis_effective_area_read(short=False, long=False):
     if short:
-        preflight = readsav('eis_calibration/preflight_calib_short.sav')
+        preflight = readsav(pathlib.Path(__file__).parent / 'preflight_calib_short.sav')
     if long:
-        preflight = readsav('eis_calibration/preflight_calib_long.sav')
+        preflight = readsav(pathlib.Path(__file__).parent / 'preflight_calib_long.sav')
     wave = preflight['wave']
     ea = preflight['ea']
     return wave, ea
@@ -166,11 +168,5 @@ def is_eis_wavelength(input_wave):
 
 
 def calib_2014(map):
-    import sunpy.map
-    import re
-    
-    match = re.search(r'\d+\.\d+', map.meta['line_id'])
-    wvl_value = float(match.group())
-    calib_ratio = eis_ea(wvl_value)/eis_ea_nrl(map.date.value, wvl_value)
-    new_map = sunpy.map.Map(map.data*calib_ratio, map.meta)
-    return new_map
+    calib_ratio = eis_ea(map.wavelength)/eis_ea_nrl(map.date, map.wavelength)
+    return map * calib_ratio
