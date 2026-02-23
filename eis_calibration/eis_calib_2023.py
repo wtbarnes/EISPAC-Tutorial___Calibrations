@@ -19,10 +19,9 @@ def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, qui
         print('WARNING: Selected date is before the start of normal EIS science operations. Output values may be inaccurate.')
 
     if not short and not long:
-        n_input_wave = np.size(wavelength)
-        loc_short = np.where((wavelength >= 165) & (wavelength <= 213))[0]
-        loc_long = np.where((wavelength >= 245) & (wavelength <= 292))[0]
-        if (len(loc_short) + len(loc_long) < n_input_wave) or (len(loc_short) > 0 and len(loc_long) > 0):
+        in_short = np.logical_and(wavelength>=165, wavelength<=213)
+        in_long = np.logical_and(wavelength>=245, wavelength<=292)
+        if not np.logical_or(in_short, in_long).all():
             raise ValueError('ERROR: Invalid wavelength(s). Please only select values in either the short (165 - 213) or long (245 - 292) wavelength bands.')
 
     if short:
