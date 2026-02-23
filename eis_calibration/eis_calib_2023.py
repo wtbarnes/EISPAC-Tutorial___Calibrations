@@ -1,6 +1,4 @@
-import datetime
 import pathlib
-import re
 
 import astropy.time
 import numpy as np
@@ -11,60 +9,8 @@ from scipy.io import readsav
 
 from eis_calibration.eis_calib_2014 import eis_ea
 
-def anytim2tai(time_str):
-    """
-    Converts a given time string into TAI (Temps Atomique International) format.
 
-    Parameters
-    ----------
-    time_str : str
-        The time string to be converted. It should be in the format 'YYYY-MM-DD HH:MM:SS'.
-
-    Returns
-    -------
-    float
-        The corresponding TAI time value as seconds since 1 January 1958.
-
-    Notes
-    -----
-    This function assumes that the input time string is in UTC (Coordinated Universal Time).
-    The conversion from UTC to TAI is based on the assumption that TAI is always ahead of UTC
-    by a fixed offset of 37 seconds.
-
-    """
-    time_str = re.sub(r'[^\w\s.]', '', time_str)
-    # Split the input time string into the main part and the fractional part (if present)
-    time_str, _, fractional_part = time_str.partition('.')
-
-    # Check if the time string contains a 'T' separator
-    if 'T' in time_str:
-        # Split the date and time components using the 'T' separator
-        date_str, time_str = time_str.split('T')
-        # Combine the date and time components with a space separator
-        time_str = f"{date_str} {time_str}"
-    else:
-        # Remove any non-alphanumeric characters from the time string
-        time_str = re.sub(r'[^\w\s]', '', time_str)
-
-    # Parse the input time string into a datetime object
-    dt = datetime.datetime.strptime(time_str, '%Y%m%d %H%M%S')
-
-    # Calculate the number of seconds since the Unix epoch (1 January 1970)
-    seconds_since_epoch = (dt - datetime.datetime(1970, 1, 1)).total_seconds()
-
-    # Calculate the number of seconds between the TAI epoch (1 January 1958) and the Unix epoch
-    tai_offset = (datetime.datetime(1970, 1, 1) - datetime.datetime(1958, 1, 1)).total_seconds()
-
-    # Add the offset to the seconds since the Unix epoch to get the TAI time value
-    tai_time = seconds_since_epoch + tai_offset
-
-    # Add the fixed offset between UTC and TAI (37 seconds)
-    tai_time += 37
-
-    return tai_time
-
-
-def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_file=None, quiet=False):
+def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, quiet=False):
     date = sunpy.time.parse_time(date)
     wavelength = wavelength.to_value('AA')
     
@@ -132,7 +78,6 @@ def interpol_eis_ea(date, wavelength, short=False, long=False, radcal=False, ea_
         ergs_to_photons = 6.626e-27 * 2.998e10 * 1.e8
         gain = 6.3
         phot_to_elec = 12398.5 / 3.65
-        tau_sensitivity = 1894.0
 
         print('Returning radcal values for converting [DN/s] to [ergs/(sr cm^2 s)]')
         print('   Note: You may still need to adjust for exposure time and slitsize.')
